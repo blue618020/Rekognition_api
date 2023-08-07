@@ -6,17 +6,15 @@ from config import Config
 import boto3
 import json
 
-# Rekognition 클라이언트 생성
-s3 = boto3.client('rekognition', 
-                  'ap-northeast-2',
-                   aws_access_key_id = Config.AWS_ACCESS_KEY_ID,
-                   aws_secret_access_key = Config.AWS_SECRET_ACCESS_KEY)
+## 얼굴 비교
+class PhotoResource(Resource):
+    def post(self):
 
+        # 데이터 받아오기
+        sourceImage = request.files['sourceImage']
+        targetImage = request.files['targetImage']
 
-## 이미지 저장
-def PhotoSave(sourceImage, targetImage):
-
-    # 파일이름 시간순으로 가공
+        # 파일이름 시간순으로 가공
         current_time = datetime.now()
         sourceImage_file_name = 'sourceImage' + current_time.isoformat().replace(':','_') + '.jpg'
         targetImage_file_name = 'targetImage' + current_time.isoformat().replace(':','_') + '.jpg'
@@ -40,22 +38,17 @@ def PhotoSave(sourceImage, targetImage):
             
         except Exception as e:
             return {'error':str(e)}, 500
-
-
-## 얼굴 비교
-class PhotoResource(Resource):
-    def post(self):
-
-        # 데이터 받아오기
-        sourceImage = request.files['sourceImage']
-        targetImage = request.files['targetImage']
-
-        PhotoSave(sourceImage, targetImage) # S3 저장
         
-        # 얼굴 비교 실행
+        
+        # 얼굴 비교
+        s3 = boto3.client('rekognition', 
+                          'ap-northeast-2',
+                          aws_access_key_id = Config.AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key = Config.AWS_SECRET_ACCESS_KEY)
+        
         response = s3.compare_faces(SimilarityThreshold = 50,
-                                    SourceImage = {"S3Object":{"Bucket":Config.S3_BUCKET, "Name":PhotoSave.sourceImage_file_name}},
-                                    TargetImage = {"S3Object":{"Bucket":Config.S3_BUCKET, "Name":PhotoSave.targetImage_file_name}})
+                                    SourceImage = {"S3Object":{"Bucket":Config.S3_BUCKET, "Name":sourceImage_file_name}},
+                                    TargetImage = {"S3Object":{"Bucket":Config.S3_BUCKET, "Name":targetImage_file_name}})
         
         # 결과 응답
         # 응답 시 "Similarity" 가 얼굴 일치 정보
@@ -81,10 +74,28 @@ class PhotoExpression(Resource):
         # 데이터 받아오기
         sourceImage = request.files['sourceImage']
 
-        PhotoSave(sourceImage) # S3 저장
-
+        # 파일이름 시간순으로 가공
+        current_time = datetime.now()
+        sourceImage_file_name = 'sourceImage' + current_time.isoformat().replace(':','_') + '.jpg'
+        
+        # S3 저장
+        s3 = boto3.client('s3',
+                          aws_access_key_id = Config.AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key = Config.AWS_SECRET_ACCESS_KEY)
+        
+        try:
+            s3.upload_fileobj(sourceImage, 
+                              Config.S3_BUCKET, 
+                              sourceImage_file_name,
+                              ExtraArgs = {'ACL':'public-read',
+                                           'ContentType':'image/jpeg'})
+            
+        except Exception as e:
+            return {'error':str(e)}, 500
+        
+    
         # 얼굴 표정 인식 실행
-        response = s3.detect_faces(Image={'S3Object':{'Bucket':Config.S3_BUCKET,'Name':PhotoSave.sourceImage_file_name}},
+        response = s3.detect_faces(Image={'S3Object':{'Bucket':Config.S3_BUCKET,'Name':sourceImage_file_name}},
                                    Attributes=['ALL']) 
                                 # 모든 얼굴 특징, 포즈, 표정, 성별 등을 분석하도록 설정
 

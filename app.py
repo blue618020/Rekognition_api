@@ -11,7 +11,7 @@ api = Api(app)
 api.add_resource(PhotoResource,'/photo')
 
 # 얼굴 표정
-api.add_resource(PhotoExpression, '/photo')
+api.add_resource(PhotoExpression, '/photoEx')
 
 if __name__ == 'main':
     app.run()
